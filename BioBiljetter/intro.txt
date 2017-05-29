@@ -1,0 +1,26 @@
+INTRO
+
+Detta program ger dig som ägare av biografer 
+möjligheten att beräkna inkomsten av varje 
+biograf samt hur många procent av den totala
+mängden platser som sålts. 
+
+När programmet startar så kommer de biografer
+som redan finns skrivas ut samt att du som
+användare kommer frågas om ett val. Dessa val 
+är:
+
+1) om du skriver in siffran 1 så kommer du
+kunna lägga till en biograf
+
+2) om du skriver in siffran 2 så kommer du 
+ha möjligheten att välja en biograf och skriva
+in antalet sålda biljetter. Programmet kommer
+då att skriva ut intäkten för den biografen samt
+beläggningen för just den biografen
+
+3) om du skriver in siffran 3 så kommer programmet att
+avslutas. När programmet avslutas så kommer den skriva ut
+en lista där biograferna sorteras efter beläggningsgrad,
+dessutom så kommer den totala intäkten från alla
+biografer skrivas ut.
