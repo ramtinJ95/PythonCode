@@ -4,12 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from database_manager import batch_insert, get_latest_checkpoint, update_checkpoint
+from src.database_manager import batch_insert, get_latest_checkpoint, update_checkpoint
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -18,10 +14,12 @@ def natural_sort_key(s: str) -> list[str]:
 
 
 def get_csv_files_in_order(directory: str = "data") -> list[str]:
-    data_dir = Path(directory)
+    # project root directory (one level up from the src directory)
+    project_root = Path(__file__).parent.parent
+    data_dir = project_root / directory
 
     if not data_dir.exists():
-        logger.error("Directory %s does not exist", directory)
+        logger.error("Directory %s does not exist", data_dir)
         return []
 
     csv_files = [f.name for f in data_dir.iterdir() if f.is_file() and f.suffix.lower() == ".csv"]
@@ -30,20 +28,18 @@ def get_csv_files_in_order(directory: str = "data") -> list[str]:
     return [str(data_dir / file) for file in csv_files]
 
 
-def parse_csv_file(file_path: str, checkpoint_timestamp: str | None = None) -> pd.DataFrame:
+def parse_csv_file(
+    file_path: str, checkpoint_timestamp: str | None = None, human_readable_dt: str | None = None
+) -> pd.DataFrame:
     logger.info("Parsing file: %s", file_path)
 
     try:
         data_frame = pd.read_csv(file_path)
 
-        # Filter rows based on checkpoint if provided
         if checkpoint_timestamp:
-            logger.info("Filtering rows with system_timestamp > %s", checkpoint_timestamp)
-            # Convert checkpoint_timestamp to datetime for comparison
+            logger.info("Filtering rows with system_timestamp > %s", human_readable_dt)
             checkpoint_dt = pd.to_datetime(checkpoint_timestamp)
-            # Convert system_timestamp column to datetime
             data_frame["system_timestamp"] = pd.to_datetime(data_frame["system_timestamp"])
-            # Filter rows with system_timestamp greater than checkpoint
             original_count = len(data_frame)
             data_frame = data_frame[data_frame["system_timestamp"] > checkpoint_dt]
             filtered_count = len(data_frame)
@@ -65,12 +61,7 @@ def insert_data_into_database(data_frame: pd.DataFrame) -> None:
         logger.warning("No data to insert into database")
         return
 
-    rows_inserted = 0
-    latest_timestamp = None
-
     try:
-        # For a truly incremental approach, we insert all records
-        # The unique constraint on (id, system_timestamp) prevents exact duplicates
         query_template = """
         INSERT INTO item_prices
         (id, item, price, currency, created_at, updated_at, system_timestamp)
@@ -78,95 +69,69 @@ def insert_data_into_database(data_frame: pd.DataFrame) -> None:
         ON CONFLICT (id, system_timestamp) DO NOTHING;
         """
 
-        # Process in batches of 100 for better performance
         batch_size = 100
-        total_rows = len(data_frame)
+        rows_inserted = 0
+        latest_timestamp = None
 
-        for i in range(0, total_rows, batch_size):
-            batch_end = min(i + batch_size, total_rows)
-            batch = data_frame.iloc[i:batch_end]
+        for batch_df in [data_frame[i : i + batch_size] for i in range(0, len(data_frame), batch_size)]:
+            params_list = [tuple(row) for row in batch_df.values]
 
-            # Avoid line length issues by breaking up the log message
-            batch_num = i // batch_size + 1
-            total_batches = (total_rows - 1) // batch_size + 1
-            logger.info(
-                "Processing batch %s (%s to %s) of %s",
-                batch_num,
-                i,
-                batch_end - 1,
-                total_batches,
-            )
-
-            # Create a list of parameter tuples for the batch
-            params_list = []
-            current_batch_latest_timestamp = None
-
-            for _, row in batch.iterrows():
-                params = (
-                    row["id"],
-                    row["item"],
-                    row["price"],
-                    row["currency"],
-                    row["created_at"],
-                    row["updated_at"],
-                    row["system_timestamp"],
-                )
-
-                params_list.append(params)
-
-                # Keep track of the latest timestamp in this batch
-                if current_batch_latest_timestamp is None or row["system_timestamp"] > current_batch_latest_timestamp:
-                    current_batch_latest_timestamp = row["system_timestamp"]
-
-            # Execute all inserts in the batch with a single database operation
             try:
                 batch_rows_inserted = batch_insert(query_template, params_list)
                 rows_inserted += batch_rows_inserted
                 logger.info("Batch inserted %s rows", batch_rows_inserted)
 
-                # Update the overall latest timestamp
-                if latest_timestamp is None or current_batch_latest_timestamp > latest_timestamp:
-                    latest_timestamp = current_batch_latest_timestamp
+                batch_max_timestamp = batch_df["system_timestamp"].max()
+                if latest_timestamp is None or batch_max_timestamp > latest_timestamp:
+                    latest_timestamp = batch_max_timestamp
 
             except Exception:
                 logger.exception("Error inserting batch")
 
         logger.info("Successfully inserted %s rows into the database", rows_inserted)
 
-        # Update the checkpoint with the latest timestamp if we inserted any rows
         if latest_timestamp is not None:
-            # Check if latest_timestamp is already a string
-            if isinstance(latest_timestamp, str):
-                update_checkpoint("item_prices_ingestion", latest_timestamp)
-            else:
-                update_checkpoint("item_prices_ingestion", latest_timestamp.isoformat())
+            update_checkpoint(
+                "item_prices_ingestion",
+                latest_timestamp if isinstance(latest_timestamp, str) else latest_timestamp.isoformat(),
+            )
 
     except Exception:
         logger.exception("Error inserting data into database")
 
 
-def main() -> None:
+def load_csv_files() -> None:
     try:
         logger.info("Starting CSV processing")
-
-        # Get the latest checkpoint
-        checkpoint_timestamp = get_latest_checkpoint("item_prices_ingestion")
-        if checkpoint_timestamp:
-            logger.info("Found checkpoint: %s", checkpoint_timestamp)
-        else:
-            logger.info("No checkpoint found, will process all data")
 
         file_paths = get_csv_files_in_order()
         logger.info("Found %s CSV files to process", len(file_paths))
 
         for file_path in file_paths:
-            data_frame = parse_csv_file(file_path, checkpoint_timestamp)
+            # Get the latest checkpoint before processing each file
+            checkpoint_result = get_latest_checkpoint("item_prices_ingestion")
+            datetime_object = None
+            checkpoint_timestamp = None
+            human_readable = None
+
+            if checkpoint_result:
+                datetime_object, checkpoint_timestamp = checkpoint_result
+                human_readable = datetime_object.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+                logger.info("Processing file %s with checkpoint: %s", file_path, human_readable)
+            else:
+                logger.info("Processing file %s with no checkpoint", file_path)
+
+            data_frame = parse_csv_file(file_path, checkpoint_timestamp, human_readable)
             if not data_frame.empty:
                 insert_data_into_database(data_frame)
 
         logger.info("CSV processing completed successfully")
     except Exception:
         logger.exception("Error during CSV processing")
+
+
+def main() -> None:
+    load_csv_files()
 
 
 if __name__ == "__main__":

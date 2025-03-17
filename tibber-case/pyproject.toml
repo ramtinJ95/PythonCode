@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "tibber-case"
 version = "0.1.0"
-description = "Tibber Data Engineering Task"
+description = "Tibber Data Engineering Case"
 authors = ["ramtin95 <ramme95@gmail.com"]
 readme = "README.md"
 package-mode = false
@@ -10,13 +10,15 @@ package-mode = false
 python = ">=3.11.9"
 pandas = "^2.2.3"
 requests = "^2.32.3"
-sqlalchemy = "^2.0.39"
 psycopg2-binary = "^2.9.10"
 python-dotenv = "^1.0.1"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "0.9.9"
 mypy = "^1.15.0"
+pytest = "^8.3.5"
+pytest-mock = "^3.14.0"
+pytest-cov = "^6.0.0"
 
 
 [build-system]

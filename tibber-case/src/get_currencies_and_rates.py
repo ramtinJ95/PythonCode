@@ -4,13 +4,12 @@ from typing import Any
 
 import requests
 
-from database_manager import batch_insert
+from src.database_manager import batch_insert
 
 logger = logging.getLogger(__name__)
 
-# Constants
 HTTP_OK = 200
-REQUEST_TIMEOUT = 10  # seconds
+REQUEST_TIMEOUT = 3
 
 
 def get_currencies() -> dict[str, dict[str, str]] | None:
@@ -28,6 +27,8 @@ def get_currencies() -> dict[str, dict[str, str]] | None:
 
 
 def get_currency_conversion_rates(currency_code: str, date: str | None = None) -> dict[str, Any] | None:
+    # No date provided, use today's date
+    # This is for consistency, the api actually returns latest rates if no date param.
     if date is None:
         date = datetime.now(tz=UTC).date().strftime("%Y-%m-%d")
 
@@ -115,7 +116,6 @@ def insert_rates(rates_data: dict[str, Any] | None = None) -> int:
     rates = rates_data.get("rates", {})
 
     try:
-        # Process in batches for better performance
         batch_size = 50
         rate_items = list(rates.items())
         total_items = len(rate_items)
@@ -148,7 +148,6 @@ def insert_rates(rates_data: dict[str, Any] | None = None) -> int:
             for currency_code, rate in batch:
                 params_list.append((currency_code, rate, date))
 
-            # Execute all inserts in the batch with a single database operation
             try:
                 batch_rows_inserted = batch_insert(query_template, params_list)
                 inserted_count += batch_rows_inserted
@@ -163,7 +162,7 @@ def insert_rates(rates_data: dict[str, Any] | None = None) -> int:
         return inserted_count
 
 
-def main() -> None:
+def get_currencies_and_rates() -> None:
     logger.info("Inserting currencies into the database...")
     currency_count = insert_currencies()
 
@@ -178,9 +177,9 @@ def main() -> None:
     )
 
 
+def main() -> None:
+    get_currencies_and_rates()
+
+
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
     main()

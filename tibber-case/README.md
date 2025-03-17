@@ -1,139 +1,54 @@
 # Tibber Data Engineering Task
 
-This project implements a data pipeline for currency conversion and transaction data processing as specified in the Tibber case assignment.
+Data pipeline for currency conversion and transaction data processing.
 
 ## Requirements
+- Python 3.11.9+
+- Poetry: https://python-poetry.org/docs/#installing-with-pipx you can also
+install poetry through normal pip there are some subtle differences and using
+pip to install it is usually done in a CI environment.
 
-- Python 3.11.9 or higher
-- Poetry (1.x or 2.x)
-- PostgreSQL database
+If you dont want to install Poetry to run this project, I have exported a requirements.txt file
+that can be used with the old school way of virtual env + pip install -r workflow. 
 
-## Project Structure
-
-```
-tibber-case/
-├── data/                  # CSV transaction data files
-│   ├── batch1.csv
-│   ├── batch2.csv
-│   └── batch3.csv
-├── src/                   # Source code
-│   └── tibber_case/       # Main package
-│       ├── currency/      # Currency rate handling
-│       ├── transaction/   # Transaction data processing
-│       └── database/      # Database connection and models
-├── pyproject.toml         # Poetry configuration
-├── poetry.lock            # Dependency lock file
-└── README.md              # This file
-```
+- PostgreSQL
 
 ## Installation
-
-### Using Poetry 2.x
+Before running make install run the following command:
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd tibber-case
-
-# Install dependencies
-poetry install
-
-# Activate the virtual environment
-poetry shell
+poetry config virtualenvs.in-project true
 ```
-
-### Using Poetry 1.x
+and it should just use the poetry.lock that
+already exists in this repo and create a `.venv` folder for you.
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd tibber-case
-
-# Install dependencies
-poetry install
-
-# Activate the virtual environment
-poetry shell
+make install
 ```
 
 ## Configuration
-
-Create a `.env` file in the project root with the following variables:
-
+Create a `.env` file:
 ```
-# Database configuration
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=tibber
 DB_USER=your_username
 DB_PASSWORD=your_password
-
-# API configuration (if needed)
-VATCOMPLY_API_KEY=your_api_key
 ```
+Most likley the project has the .env file already for this case.
 
 ## Usage
-
-### 1. Currency Rate Ingestion
-
-Fetch and store currency conversion rates:
-
 ```bash
-poetry run python -m src.tibber_case.currency.ingest
+# Run the complete pipeline
+make run_case
 ```
-
-### 2. Transaction Data Ingestion
-
-Process and store transaction data from CSV files:
-
-```bash
-poetry run python -m src.tibber_case.transaction.ingest
-```
-
-### 3. Create SQL View for Currency Conversion
-
-Create the SQL view for currency conversion:
-
-```bash
-poetry run python -m src.tibber_case.database.create_view
-```
+If you want to rerun the insert from csv's and getting data from the api then choose 'N'
+when asked for input once you run make run_case. If you choose to reset the database it will drop all tables and views, recreate them and then insert data again into them. Can be useful for testing.
 
 ## Development
-
-### Running Tests
-
 ```bash
-poetry run pytest
-```
+# Run tests
+make test
 
-### Code Formatting
-
-```bash
-poetry run black src
-```
-
-## Troubleshooting
-
-### Poetry Version Differences
-
-- **Poetry 1.x**: Uses `poetry run` to execute commands in the virtual environment
-- **Poetry 2.x**: Also uses `poetry run`, but has some different command-line options
-
-If you encounter issues with Poetry 2.x, try:
-
-```bash
-# Check Poetry version
-poetry --version
-
-# For Poetry 2.x specific issues, try:
-poetry config virtualenvs.in-project true
-poetry env use python3.11
-poetry install
-```
-
-### Database Connection Issues
-
-If you encounter database connection issues:
-1. Verify PostgreSQL is running
-2. Check your `.env` file for correct credentials
-3. Ensure the database exists: `createdb tibber`
+# Format code
+make format
