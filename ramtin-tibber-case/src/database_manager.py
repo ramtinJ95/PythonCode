@@ -71,16 +71,6 @@ def batch_insert(query: str, params_list: list[tuple[Any, ...]]) -> int:
                         len(params_list),
                         rows_affected,
                     )
-                    # checks which rows were skipped
-                    for params in params_list:
-                        check_query = """
-                        SELECT COUNT(*) FROM item_prices 
-                        WHERE id = %s AND system_timestamp = %s
-                        """
-                        cursor.execute(check_query, (params[0], params[6]))  # id and system_timestamp
-                        count = cursor.fetchone()[0]
-                        if count > 0:
-                            logger.info("Row with id=%s and system_timestamp=%s already exists", params[0], params[6])
             except Exception as e:
                 logger.error("Error during batch insert: %s", str(e))
                 raise
